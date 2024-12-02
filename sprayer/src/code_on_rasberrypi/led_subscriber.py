@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import rospy
 from std_msgs.msg import String
 import serial
@@ -7,7 +7,7 @@ import time
 class ArduinoController:
     def __init__(self):
         # Set up the serial connection to the Arduino
-        self.arduino = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)  # Replace with your port
+        self.arduino = serial.Serial('/dev/ttyACM1', 9600, timeout=1)  # Replace with your port
         time.sleep(2)  # Allow time for the connection to initialize
 
         # Initialize the ROS subscriber
