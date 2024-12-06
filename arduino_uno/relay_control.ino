@@ -1,4 +1,5 @@
 const int relayPin = 7;  // Pin connected to the relay
+bool isRelayOn = false; 
 
 void setup() {
   pinMode(relayPin, OUTPUT);       // Set relay pin as output
@@ -11,11 +12,13 @@ void loop() {
     String command = Serial.readStringUntil('\n');  // Read the incoming message
     command.trim();  // Remove any extra whitespace or newline characters
 
-    if (command == "RELAY_ON") {
+    if (command == "RELAY_ON" && !isRelayOn) {
       digitalWrite(relayPin, HIGH);  // Turn the relay ON
+      isRelayOn = false;
       Serial.println("Relay is ON");
-    } else if (command == "RELAY_OFF") {
+    } else if (command == "RELAY_OFF" && isRelayOn) {
       digitalWrite(relayPin, LOW);   // Turn the relay OFF
+      isRelayOn = true;
       Serial.println("Relay is OFF");
     } else {
       Serial.println("Unknown command received");
