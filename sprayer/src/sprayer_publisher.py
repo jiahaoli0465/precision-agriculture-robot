@@ -1,82 +1,291 @@
 import rospy
 import time
+import math
 from std_msgs.msg import String
 import cv2
 import cv_bridge
-import numpy as np
 from sensor_msgs.msg import CompressedImage, LaserScan
 from geometry_msgs.msg import Twist, Point
-from leaf_detection import LeafDetectionModel
-from PIL import Image
+from detector import Detector
+from camera_control import CameraControl
+import time
+import tf2_ros
+
+
+SPEED = 0.08
+# gap between the robot and a plant
+GAP = 0.7
+RATE = 10
 
 
 class Sprayer:
     def __init__(self):
-        rospy.init_node('robot_node', anonymous=True)
-        self.model = LeafDetectionModel()
+        rospy.init_node('sprayer_node', anonymous=True)
+        self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
+        self.my_odom_sub = rospy.Subscriber('my_odom', Point, self.my_odom_cb)
+        self.relay_pub = rospy.Publisher('/relay_control', String, queue_size=10)
+        self.scan_sub = rospy.Subscriber('/scan', LaserScan, self.scan_cb)
+        self.dist = None
+        self.yaw = None
 
-    def test_with_stored_image(self, image_path):
-        """Test the model with a stored image."""
-        try:
-            # Load the image using OpenCV
-            cv_image = cv2.imread(image_path)
-            if cv_image is None:
-                rospy.logerr(f"Failed to load image from {image_path}")
-                return
+        self.right_dist = float('inf')
+        self.left_dist = float('inf')
+        self.front_dist = float('inf')
 
-            # Convert OpenCV image to RGB format
-            cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-            # Convert to PIL Image
-            pil_image = Image.fromarray(cv_image)
+        self.detector = Detector()
+        self.camera_control = CameraControl()
 
-            # Perform leaf detection
-            boxes, classes, confidences = self.model.predict(pil_image)
-            rospy.loginfo(f"Detections: {len(boxes)}")
-            # print(results[0].boxes)
-            # render = render_result(model=model, image=image, result=results[0]) 
-            # render.show()
-            # # Annotate image
-            for box, cls, conf in zip(boxes, classes, confidences):
-                x1, y1, x2, y2 = map(int, box)
-                label = f"Class {cls}: {conf:.2f}"
-                cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(cv_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-            
-            # Display the annotated image
-            # cv2.imshow("Test Image", cv_image)
-            # cv2.waitKey(0)  # Wait indefinitely until a key is pressed
-            # cv2.destroyAllWindows()
-            output_path = "annotated_image.jpg"  # Change the filename if needed
-            cv2.imwrite(output_path, cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR))
-            rospy.loginfo(f"Annotated image saved to {output_path}")
-        except Exception as e:
-            rospy.logerr(f"Error processing image: {e}")
+        self.fiducial_ids = [100, 108]
+        self.count = 0
 
-    def led_control_publisher():
-        pub = rospy.Publisher('/led_control', String, queue_size=10)
-        rospy.init_node('led_control_publisher', anonymous=True)
-        rate = rospy.Rate(1)  
+        self.rate = rospy.Rate(RATE)  
 
+    def my_odom_cb(self, msg):
+        """Callback function for `self.my_odom_sub`."""
+        self.dist = msg.x  
+        self.yaw = msg.y  
+    
+    def scan_cb(self, msg):
+        """
+        Callback function for `self.scan_sub`.
+        """
+        # Assuming right-hand wall following, get the distance to the wall
+        averages = self.preprocessor(msg.ranges)  
+
+        # print(averages)
+        self.right_dist = averages[24]
+        # print(self.right_dist)
+
+        self.left_dist = averages[7]
+        self.front_dist = averages[0]
+
+        # # Calculate the distance error
+        # error_d = self.right_dist - DESIRED_DISTANCE
+        # current_time = rospy.Time.now().to_sec()
+       
+        # self.pid(error_d, current_time)
+       
+        # # Update previous error and time for the next iteration
+        # self.prev_error_d = error_d
+        # self.prev_time = current_time
+
+    def sprayer_control(self, is_power_on=False):
+        message = ["RELAY_OFF", "RELAY_ON"]
+        msg = message[0]
+        if is_power_on:
+            msg = message[1]
+        self.relay_pub.publish(msg)  
+        pass
+    
+    def normalize(self, angle):
+        return (angle + math.pi) % (2 * math.pi) - math.pi  
+    
+    def face_pin(self, pin_id):
+        """
+        Rotates the robot so that it faces the target pin.
+        """
+        twist = Twist()
+        print('face pin')
+        if not self.yaw:
+            time.sleep(1)
+        if not self.yaw:
+            time.sleep(1)
+        if not self.yaw:
+            time.sleep(1)
+        if not self.yaw:
+            time.sleep(1)            
+        initial_yaw = self.yaw
         while not rospy.is_shutdown():
-            message = ["RELAY_OFF", "RELAY_ON"]
-            for m in message:
-                pub.publish(m)  
-                rospy.loginfo(f"Published: {m}")
-                time.sleep(5)
+            try:
+                pin_tf = self.tf_buffer.lookup_transform('base_link', f'pin_{pin_id}', rospy.Time())
+
+                # Fiducial's position relative to the robot
+                fid_x = pin_tf.transform.translation.x
+                fid_y = pin_tf.transform.translation.y
+                # Calculate the desired heading to face the fiducial
+                desired_heading = math.atan2(fid_y, fid_x) 
+                desired_heading = desired_heading if desired_heading >= 0 else 2 * math.pi + desired_heading
+                print('desired', desired_heading)
+                # Calculate the yaw difference between current yaw and desired heading
+                yaw_diff = (desired_heading + initial_yaw) - self.yaw
+                yaw_diff = (yaw_diff + math.pi) % (2 * math.pi) - math.pi  # Normalize to [-pi, pi]
+                # Check if alignment is achieved within a small threshold
+                if abs(yaw_diff) < 0.05: 
+                    break
+                # Rotate the robot based on the yaw difference
+                twist.angular.z = yaw_diff * 0.5  # Scale the rotation by yaw_diff for finer control
+                twist.linear.x = 0.0  # Ensure no forward movement during alignment
+                self.cmd_vel_pub.publish(twist)
+
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                pass
+            self.rate.sleep()
+        # Stop rotation
+        twist.angular.z = 0.0
+        self.cmd_vel_pub.publish(twist)
+    
+    def process_plant(self):
+        image = self.camera_control.capture_image()
+        is_detected, plant_type  = self.detector.detect_plant(image)
+        if is_detected:
+            print('spraying...')
+            time.sleep(2)
+            print('spraying done')
+        else:
+            print('not a plant not spraying')
+            time.sleep(2)
+            print('spraying over')
+
+    def get_pin_id(self):
+        if self.count == 0:
+            self.count += 1
+            return 108
+        return 100
+
+
+
+
+    def locate(self):
+        twist = Twist()
+        RIGHT = - math.pi / 2 
+        LEFT = math.pi / 2
+        while not rospy.is_shutdown():
+            twist.linear.x = SPEED  
+            if self.right_dist < GAP:
+                twist.linear.x = 0.0
+
+
+                before_turn_yaw = self.yaw
+
+                self.turn(RIGHT)
+
+
+                self.face_pin(self.get_pin_id())
+
+
+                self.turn(before_turn_yaw)
+
+                twist.linear.x = 0.1
+
+
+
+
+
+
+                # TO DO:
+                # mark as scanned with fiducials
+                # spray
+
+
+
+                # detect if it is a plant
+
+
+
+
+                # self.turn(LEFT)
+                # self.turn(LEFT)
+                # mark as scanned with fiducials
+                # self.turn(RIGHT)
+                # break
+            # elif self.left_dist < GAP:
+                # twist.linear.x = 0.0
+             
+                # break
+
+            self.cmd_vel_pub.publish(twist)
+        twist.linear.x = 0.0
+
+    def turn(self, target_yaw):
+        """
+        Turns the robot to heading `target_yaw`.
+        """
+        twist = Twist()
+
+        if not self.yaw: return
+        target_yaw = self.yaw + target_yaw
+        target_yaw = self.normalize(target_yaw)
+        while not rospy.is_shutdown():
+
+            if self.yaw:
+                difference = self.normalize(target_yaw - self.yaw)
+                if abs(difference) < 0.02:
+                    twist.angular.z = 0.0
+                    twist.linear.x = 0.0
+                    rospy.loginfo("Finish turning to %d", target_yaw)
+                    break
+                else:
+                    twist.linear.x = 0.0
+                    twist.angular.z = difference * 0.5
+
+                self.cmd_vel_pub.publish(twist)
+            self.rate.sleep()
+
+        twist.linear.x = 0.0
+
+    def normalize(self, angle):
+        """Normalize angle to [-pi, pi]."""
+        pi = math.pi
+        return (angle + pi) % (2 * pi) - pi
+
+    def preprocessor(self, all_ranges):
+        '''
+        return ranges as the average of groups of 12 values, 30 groups total
+        0,7,14,22 would roughly be the index of front left back right, since lidar is counterclockwise
+        '''
+        ranges = [float('inf')]*30 
+        range_num = len(all_ranges) 
+        batch_range =  range_num // 30 
+        ranges_index = 0
+        index = -6
+        sum = 0
+        sum_list = []
+        batch = 0
+        actual = 0
+
+        for i in range(241):
+            curr = all_ranges[index]
+            if curr != float('-inf') and not math.isnan(curr):
+                sum += curr
+                # sum_list.append(curr)
+                actual += 1
+            batch += 1
+            index += 1
+            if batch == batch_range:
+                if actual != 0:
+                    ranges[ranges_index] = sum/actual
+                    # ranges[ranges_index] = min(sum_list)
+
+                ranges_index += 1
+                sum = 0
+                batch = 0
+                actual = 0
+
+        # calculate average for the extra scanner points
+        for i in range(241, range_num):
+            curr = all_ranges[index]
+            if curr != float('-inf') and not math.isnan(curr):
+                sum += curr
+                actual += 1
+        if actual != 0:
+            ranges[29] = sum/actual
+
+        return ranges
+
+    def test(self):
+        while not rospy.is_shutdown():
+            pass
 
 
 if __name__ == "__main__":
     try:
         sprayer = Sprayer()
-        image_path = "onion_leaves.jpeg"  
-        robot.test_with_stored_image(image_path)
+        sprayer.locate()
+        # sprayer.sprayer_control() 
+        # sprayer.test()
+        
     except rospy.ROSInterruptException:
         rospy.loginfo("Shutting down")
-        cv2.destroyAllWindows()
-
-
-# Arduino Uno ID
-# Bus 001 Device 006: ID 2341:0069 Arduino SA 
-# ATTRS{serial}=="30022E1436313536DFA333334B572F3E"
-# SUBSYSTEM=="tty", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0069", ATTRS{serial}=="30022E1436313536DFA333334B572F3E", SYMLINK+="arduino-uno"

@@ -1,0 +1,14 @@
+<launch>  
+  <include file="$(find aruco_detect)/launch/aruco_detect.launch">
+      <param name="publish_images" value="true" />
+      <arg name="do_pose_estimation" value="true" />
+      <arg name="vis_msgs" value="true" />
+      <arg name="fiducial_len" value="0.14" />
+      <arg name="dictionary" value="7" />
+      <arg name="camera" value="raspicam_node" />
+      <arg name="image" value="image" />
+  </include>
+
+  <!-- <node name="mapper" pkg="fiducial_nav" type="mapper_real.py" output="screen" />
+  <node name="my_odom" pkg="fiducial_nav" type="my_odom.py" output="screen" /> -->
+</launch>
