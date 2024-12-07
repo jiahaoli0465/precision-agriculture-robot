@@ -2,7 +2,6 @@ import base64
 from openai import OpenAI
 from detector import Detector
 
-# client = OpenAI(api_key = "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")
 
 # Function to encode the image
 def encode_image(image_path):
