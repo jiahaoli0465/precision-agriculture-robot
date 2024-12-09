@@ -38,8 +38,12 @@ class Sprayer:
         self.detector = Detector()
         self.camera_control = CameraControl()
 
-        self.fiducial_ids = [100, 108]
+        # self.fiducial_ids = [100, 108]
         self.count = 0
+
+        self.angular_rate = 2.0
+        self.linear_rate = 1.2
+
 
         self.rate = rospy.Rate(RATE)  
 
@@ -72,13 +76,11 @@ class Sprayer:
         # self.prev_error_d = error_d
         # self.prev_time = current_time
 
-    def sprayer_control(self, is_power_on=False):
-        message = ["RELAY_OFF", "RELAY_ON"]
-        msg = message[0]
-        if is_power_on:
-            msg = message[1]
-        self.relay_pub.publish(msg)  
-        pass
+    def sprayer_control(self, duration=3):
+        msg = ["RELAY_OFF", "RELAY_ON"]
+        self.relay_pub.publish(msg[1])  
+        time.sleep(duration)
+        self.relay_pub.publish(msg[0])  
     
     def normalize(self, angle):
         return (angle + math.pi) % (2 * math.pi) - math.pi  
@@ -88,15 +90,7 @@ class Sprayer:
         Rotates the robot so that it faces the target pin.
         """
         twist = Twist()
-        print('face pin')
-        if not self.yaw:
-            time.sleep(1)
-        if not self.yaw:
-            time.sleep(1)
-        if not self.yaw:
-            time.sleep(1)
-        if not self.yaw:
-            time.sleep(1)            
+        print('face pin')          
         initial_yaw = self.yaw
         while not rospy.is_shutdown():
             try:
@@ -127,6 +121,36 @@ class Sprayer:
         twist.angular.z = 0.0
         self.cmd_vel_pub.publish(twist)
     
+    def move_to_pin(self, pin_id):
+        """
+        Moves the robot to the target pin.
+        """
+        twist = Twist()
+        threshold = 0.3  # Distance threshold to stop
+        print('move to pin')
+        initial_position = self.dist
+        angular = 0
+        while not rospy.is_shutdown():
+            try:
+                pin_tf = self.tf_buffer.lookup_transform('base_link', f'pin_{pin_id}', rospy.Time())
+                fid_x = pin_tf.transform.translation.x
+                fid_y = pin_tf.transform.translation.y
+                linear = (fid_x - threshold) * self.linear_rate
+                angular_error = math.atan2(fid_y, fid_x) 
+                angular = angular_error * self.angular_rate - angular / 2.0
+                print('distance to fiducial', linear)
+                if linear < 0.001 and angular < 0.001:
+                    break
+                twist.linear.x = linear
+                twist.angular.z = angular  
+                self.cmd_vel_pub.publish(twist)
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                pass
+            self.rate.sleep()
+        # Stop movement
+        twist.linear.x = 0.0
+        self.cmd_vel_pub.publish(twist)
+
     def process_plant(self):
         image = self.camera_control.capture_image()
         is_detected, plant_type  = self.detector.detect_plant(image)
@@ -152,51 +176,18 @@ class Sprayer:
         twist = Twist()
         RIGHT = - math.pi / 2 
         LEFT = math.pi / 2
+        target_pin_ids = [109]
         while not rospy.is_shutdown():
             twist.linear.x = SPEED  
-            if self.right_dist < GAP:
-                twist.linear.x = 0.0
+            for pin_id in target_pin_ids:
+                time.sleep(2)
+                self.face_pin(pin_id)
+                time.sleep(2)
+                self.move_to_pin(pin_id)
+                time.sleep(2)
+                print('complete navigation to ', pin_id)
 
-
-                before_turn_yaw = self.yaw
-
-                self.turn(RIGHT)
-
-
-                self.face_pin(self.get_pin_id())
-
-
-                self.turn(before_turn_yaw)
-
-                twist.linear.x = 0.1
-
-
-
-
-
-
-                # TO DO:
-                # mark as scanned with fiducials
-                # spray
-
-
-
-                # detect if it is a plant
-
-
-
-
-                # self.turn(LEFT)
-                # self.turn(LEFT)
-                # mark as scanned with fiducials
-                # self.turn(RIGHT)
-                # break
-            # elif self.left_dist < GAP:
-                # twist.linear.x = 0.0
-             
-                # break
-
-            self.cmd_vel_pub.publish(twist)
+            # self.cmd_vel_pub.publish(twist)
         twist.linear.x = 0.0
 
     def turn(self, target_yaw):
@@ -284,7 +275,7 @@ if __name__ == "__main__":
     try:
         sprayer = Sprayer()
         sprayer.locate()
-        # sprayer.sprayer_control() 
+        # sprayer.sprayer_control(10) 
         # sprayer.test()
         
     except rospy.ROSInterruptException:

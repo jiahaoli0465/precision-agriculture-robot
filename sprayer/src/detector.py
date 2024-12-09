@@ -5,7 +5,7 @@ from openai import OpenAI
 
 class Detector:
     def __init__(self):
-        self.client = OpenAI(api_key = "")
+        self.client = OpenAI(api_key = "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")
         self.MAX_RETRIES = 10
         self.plant_types = ['Cactus', 'Basil', 'Thyme', 'Parsley']
 

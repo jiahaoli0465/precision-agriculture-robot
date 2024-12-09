@@ -14,11 +14,11 @@ void loop() {
 
     if (command == "RELAY_ON" && !isRelayOn) {
       digitalWrite(relayPin, HIGH);  // Turn the relay ON
-      isRelayOn = false;
+      isRelayOn = true;
       Serial.println("Relay is ON");
     } else if (command == "RELAY_OFF" && isRelayOn) {
       digitalWrite(relayPin, LOW);   // Turn the relay OFF
-      isRelayOn = true;
+      isRelayOn = false;
       Serial.println("Relay is OFF");
     } else {
       Serial.println("Unknown command received");
