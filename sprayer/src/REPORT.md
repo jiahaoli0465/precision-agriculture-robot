@@ -44,8 +44,27 @@ This project serves as a proof of concept for innovative approaches to automated
 
 # Challenges
 
-## Color/Plant Detection Accuracy: 
-Ensuring that the Turtlebot reliably detects the target plant under varying lighting conditions (shadows or brightness changes) is crucial. (TALK ABOUT THE FAILED USE OF YOLO AND TRANSITION TO OPEN API )
+## Plant Detection
+
+Ensuring that the Turtlebot reliably detects the target plant under varying lighting conditions (e.g., shadows or brightness changes) is a critical component of this project. The initial approach involved integrating a YOLOv5 model for real-time plant detection, leveraging resources such as the [Plant Leaf Detection and Classification model](https://huggingface.co/foduucom/plant-leaf-detection-and-classification). However, this approach revealed several limitations:
+
+- **Accuracy**: The model struggled with detecting plants under diverse lighting conditions and varying angles.
+- **Versatility**: It lacked adaptability to different environmental settings, which limited its practical application.
+- **Computational Load**: The YOLOv5 model was computationally intensive, making it less suitable for real-time deployment on a resource-constrained platform like the Turtlebot.
+
+To address these challenges, the project transitioned to using the **OpenAI GPT-4o-mini model** with advanced vision capabilities. This model demonstrated significantly improved performance by:
+
+- Providing **consistent detection accuracy**, achieving nearly 100% reliability across diverse conditions.
+- Offering **restricted outputs** tailored to specific plant identification, enhancing precision.
+- Operating with **greater computational efficiency**, making it a more practical option since wew off-loaded the computation to an external api.
+
+![Precision Agriculture Robot](./images/plant_compare.png)
+
+
+This refinement in plant detection methodology highlights the importance of balancing model accuracy, versatility, and computational feasibility in robotics applications. The GPT-4o-mini model proved to be a game-changer, ensuring robust and reliable plant identification for the Turtlebot's precision watering tasks. It can also detect an variety of objects outside of the plant constraints including an gatorade bottle.
+
+Our project culture is to identify hard challenges and break it down with the simpliest solutions, so we avoided trainning an large detection modal by integrating and advanced vision model.
+
 
 ## Water Sprayer Signaling System:
 Create a signaling channel for the turtlebot to control the sprayer through ROS. This requires hardware level development. 
@@ -78,7 +97,6 @@ NO: The load should be OFF by default and turn ON when the relay is activated.
 NC: Since we want the relay to be OFF by default, this port is not necessary. 
 
 <img src="./images/relay.png" alt="relay" width: "400px">
-
 
 
 
