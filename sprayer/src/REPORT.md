@@ -44,7 +44,7 @@ This project serves as a proof of concept for innovative approaches to automated
 
 # Challenges
 
-## Plant Detection
+### Plant Detection
 
 Ensuring that the Turtlebot reliably detects the target plant under varying lighting conditions (e.g., shadows or brightness changes) is a critical component of this project. The initial approach involved integrating a YOLOv5 model for real-time plant detection, leveraging resources such as the [Plant Leaf Detection and Classification model](https://huggingface.co/foduucom/plant-leaf-detection-and-classification). However, this approach revealed several limitations:
 
@@ -56,14 +56,114 @@ To address these challenges, the project transitioned to using the **OpenAI GPT-
 
 - Providing **consistent detection accuracy**, achieving nearly 100% reliability across diverse conditions.
 - Offering **restricted outputs** tailored to specific plant identification, enhancing precision.
-- Operating with **greater computational efficiency**, making it a more practical option since wew off-loaded the computation to an external api.
+- Operating with **greater computational efficiency**, making it a more practical option since computation was offloaded to an external API.
 
 ![Precision Agriculture Robot](./images/plant_compare.png)
 
+#### Implementation Code: Plant Detection with OpenAI GPT-4o-mini
 
-This refinement in plant detection methodology highlights the importance of balancing model accuracy, versatility, and computational feasibility in robotics applications. The GPT-4o-mini model proved to be a game-changer, ensuring robust and reliable plant identification for the Turtlebot's precision watering tasks. It can also detect an variety of objects outside of the plant constraints including an gatorade bottle.
+The `Detector` class leverages the GPT-4o-mini model to identify plant types or confirm the presence of a plant in an image. Below is the implementation:
 
-Our project culture is to identify hard challenges and break it down with the simpliest solutions, so we avoided trainning an large detection modal by integrating and advanced vision model.
+```python
+import base64
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
+# Retrieve the OpenAI API key from the environment variables
+open_api_key = os.getenv("OPEN_API_KEY")
+
+class Detector:
+    def __init__(self):
+        self.client = OpenAI(api_key=open_api_key)  # Initialize OpenAI client
+        self.MAX_RETRIES = 10  # Maximum retries for API requests
+        self.plant_types = ['Cactus', 'Basil', 'Thyme', 'Parsley', 'Gatorade']  # Recognized plant types
+
+    def detect_plant(self, image):
+        """
+        Detects the type of plant or Gatorade in an image.
+
+        Args:
+            image (str): Base64 encoded string of the image.
+
+        Returns:
+            tuple: (bool, str) indicating whether detection was successful and the identified plant type.
+        """
+        for i in range(self.MAX_RETRIES):
+            try:
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Output the plant type or Gatorade and only the plant type in one word: 'Cactus', 'Basil', 'Thyme', 'Parsley', or 'Gatorade' if the image's object of interest contains the plant or Gatorade"},
+                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image}"}}
+                            ],
+                        }
+                    ],
+                )
+                res = response.choices[0].message.content.strip()
+
+                if res in self.plant_types:
+                    return True, res
+                else:
+                    return False, None
+            except Exception as e:
+                print(f"Failed attempt {i}: {e}")
+
+    def is_plant(self, image):
+        """
+        Determines whether an image contains any plant.
+
+        Args:
+            image (str): Base64 encoded string of the image.
+
+        Returns:
+            bool: True if the image contains a plant, False otherwise.
+        """
+        for i in range(self.MAX_RETRIES):
+            try:
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Output in one word 'true' or 'false' if the image contains any plant"},
+                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image}"}}
+                            ],
+                        }
+                    ],
+                )
+                res = response.choices[0].message.content.strip().lower()
+
+                return res == "true"
+            except Exception as e:
+                print(f"Failed attempt {i}: {e}")
+
+```
+
+#### Explanation of Key Components
+
+##### API Initialization:
+The OpenAI client is initialized using an API key loaded from environment variables via the `dotenv` library. This ensures secure handling of sensitive information.
+
+##### Plant Type Detection:
+The `detect_plant` method sends a base64-encoded image to the OpenAI GPT-4o-mini model, instructing it to identify the object of interest from a predefined list of plant types (e.g., 'Cactus', 'Basil', etc.) or Gatorade.
+
+##### Plant Presence Detection:
+The `is_plant` method determines whether the image contains any plant, returning a boolean value.
+
+##### Retry Mechanism:
+Both methods implement a retry mechanism to handle potential API request failures, ensuring robust performance in real-world applications.
+
+This refinement in plant detection methodology highlights the importance of balancing model accuracy, versatility, and computational feasibility in robotics applications. The GPT-4o-mini model proved to be a game-changer, ensuring robust and reliable plant identification for the Turtlebot's precision watering tasks. It can also detect a variety of objects outside of the plant constraints, including a Gatorade bottle.
+
+Our project culture is to identify hard challenges and break them down with the simplest solutions. We avoided training a large detection model by integrating an advanced vision model.
 
 
 ## Water Sprayer Signaling System:
@@ -71,20 +171,17 @@ Create a signaling channel for the turtlebot to control the sprayer through ROS.
 
 One of the biggest challenge for this project was to tackle hardware modifications as a team who has no experience in hardward work. 
 
+### Components
 There are three main components that goes into making the sprayer remote controllable using ROS publisher.
 
 1. arduino uno
-
 The arduino is responsible for receiving messages from rasberry pi and controlling the relay.
 <img src="./images/arduino.png" alt="arduino" width: "400px">
 
 2. rasberry pi
-
 The rasberry pi is where the ROS subscriber is run. It listens to published messages and passes it down to arduino uno.
 
-
 3. relay
-
 The relay is responsible for controlling the open and close of the circuit loop which triggers the power of the sprayer.
 
 There are 6 ports on the relay. Each of them except NC is required for our setup 
@@ -97,6 +194,11 @@ NO: The load should be OFF by default and turn ON when the relay is activated.
 NC: Since we want the relay to be OFF by default, this port is not necessary. 
 
 <img src="./images/relay.png" alt="relay" width: "400px">
+
+### Soldering
+We also learned soldering in part of this modification. There are two different approaches we can take. 
+
+1. Directely tap into the trigger portion of the sprayer and 
 
 
 
@@ -128,3 +230,5 @@ Tables listing names and one sentence purpose of each of these:
 How it unfolded, how the team worked together
 Your own assessment
 problems that were solved, pivots that had to be taken
+
+pivoting from using a claw to 
