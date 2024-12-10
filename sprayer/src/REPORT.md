@@ -11,7 +11,7 @@ type: report
 
 This research project focuses on the development of an autonomous Turtlebot platform equipped with a precision water-dispensing system. The robot will navigate a structured indoor environment to identify and assess plants, determining both the necessity and appropriate quantity of water to apply. This system integrates advanced robotic navigation, computer vision, and AI-driven plant recognition to mimic the efficiency of precision agricultural technologies.
 
-<img src="./images/robot_img.png" alt="Robot Image" style="transform: rotate(90deg); width: 400px; margin: 50px">
+![Precision Agriculture Robot](./images/robot_img_pic.png)
 
 ## Project Goals
 
@@ -42,7 +42,14 @@ By combining robotics, AI, and precision actuation, this initiative explores inn
 ## Hardware
     One of the biggest challenge for this project was to tackle hardware modifications as a team who has no experience in hardward work. 
 
-    There are three main components for us to make the sprayer remote controllable using ROS publisher
+    There are three main components that goes into making the sprayer remote controllable using ROS publisher.
+
+    1. arduino uno
+    <img src="./images/arduino.png" alt="Robot Image" width: 400px; margin: 50px">
+    2. relay
+    <img src="./images/relay.png" alt="Robot Image" width: 400px; margin: 50px">
+    3. soldering
+    <img src="./images/solder.png" alt="Robot Image" width: 400px; margin: 50px">
 
     [details](docs/faq/hardware/external_actuator_control.md)
 ## Software
