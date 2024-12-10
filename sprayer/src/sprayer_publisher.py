@@ -6,6 +6,8 @@ import cv2
 import cv_bridge
 from sensor_msgs.msg import CompressedImage, LaserScan
 from geometry_msgs.msg import Twist, Point
+from nav_msgs.msg import Odometry
+
 from detector import Detector
 from camera_control import CameraControl
 import time
@@ -23,11 +25,13 @@ class Sprayer:
         rospy.init_node('sprayer_node', anonymous=True)
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
         self.my_odom_sub = rospy.Subscriber('my_odom', Point, self.my_odom_cb)
+        self.odom_sub = rospy.Subscriber('odom', Odometry, self.odom_cb)
+
         self.relay_pub = rospy.Publisher('/relay_control', String, queue_size=10)
         self.scan_sub = rospy.Subscriber('/scan', LaserScan, self.scan_cb)
         self.dist = None
         self.yaw = None
-
+        self.pose = None
         self.right_dist = float('inf')
         self.left_dist = float('inf')
         self.front_dist = float('inf')
@@ -46,6 +50,11 @@ class Sprayer:
 
 
         self.rate = rospy.Rate(RATE)  
+    
+    def odom_cb(self, msg):
+        cur_pose = msg.pose.pose
+        self.pose = cur_pose.position
+
 
     def my_odom_cb(self, msg):
         """Callback function for `self.my_odom_sub`."""
@@ -76,11 +85,12 @@ class Sprayer:
         # self.prev_error_d = error_d
         # self.prev_time = current_time
 
-    def sprayer_control(self, duration=3):
+    def spray_water(self, duration=3):
         msg = ["RELAY_OFF", "RELAY_ON"]
         self.relay_pub.publish(msg[1])  
         time.sleep(duration)
         self.relay_pub.publish(msg[0])  
+
     
     def normalize(self, angle):
         return (angle + math.pi) % (2 * math.pi) - math.pi  
@@ -154,9 +164,11 @@ class Sprayer:
     def process_plant(self):
         image = self.camera_control.capture_image()
         is_detected, plant_type  = self.detector.detect_plant(image)
-        if is_detected:
+        if is_detected or plant_type == 'Gatorade':
+            self.turn(0.1)
             print('spraying...')
             time.sleep(2)
+            self.spray_water()
             print('spraying done')
         else:
             print('not a plant not spraying')
@@ -170,23 +182,61 @@ class Sprayer:
         return 100
 
 
-
+    def scan_for_fids(self):
+        """
+        Scans for fiducials by rotating in place. Note that the `mapper` node
+        does the actual mapping.
+        """
+        print('scanning')
+        twist = Twist()
+        twist.angular.z = 0.4  # Set a low angular velocity for scanning
+        scan_duration = rospy.Duration(20)  # Scan for 10 seconds
+        start_time = rospy.Time.now()
+        while rospy.Time.now() - start_time < scan_duration and not rospy.is_shutdown():
+            self.cmd_vel_pub.publish(twist)
+            self.rate.sleep()
+        # Stop scanning
+        twist.angular.z = 0.0
+        self.cmd_vel_pub.publish(twist)
 
     def locate(self):
         twist = Twist()
         RIGHT = - math.pi / 2 
         LEFT = math.pi / 2
-        target_pin_ids = [109]
+        target_pin_ids = [106]
+
+        self.scan_for_fids()
+
         while not rospy.is_shutdown():
             twist.linear.x = SPEED  
+
+            start_pose = self.pose
+            
             for pin_id in target_pin_ids:
                 time.sleep(2)
                 self.face_pin(pin_id)
                 time.sleep(2)
                 self.move_to_pin(pin_id)
                 time.sleep(2)
+                
+
+                # self.spray_water()
+                self.process_plant()
+
+                time.sleep(2)
+
+                
+
+                
+
+
+
+
+
                 print('complete navigation to ', pin_id)
 
+
+            break
             # self.cmd_vel_pub.publish(twist)
         twist.linear.x = 0.0
 
@@ -199,8 +249,8 @@ class Sprayer:
         if not self.yaw: return
         target_yaw = self.yaw + target_yaw
         target_yaw = self.normalize(target_yaw)
-        while not rospy.is_shutdown():
 
+        while not rospy.is_shutdown():
             if self.yaw:
                 difference = self.normalize(target_yaw - self.yaw)
                 if abs(difference) < 0.02:
@@ -275,8 +325,11 @@ if __name__ == "__main__":
     try:
         sprayer = Sprayer()
         sprayer.locate()
-        # sprayer.sprayer_control(10) 
+        # sprayer.spray_water(30) 
         # sprayer.test()
-        
+        sprayer.relay_pub.publish("RELAY_OFF")  
+
     except rospy.ROSInterruptException:
+        sprayer.relay_pub.publish("RELAY_OFF")  
         rospy.loginfo("Shutting down")
+# BLOW AND SUCK ON THAT THING if get stuck  c

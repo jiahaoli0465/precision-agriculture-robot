@@ -1,13 +1,22 @@
 import base64
 from openai import OpenAI
+from dotenv import load_dotenv
+import os
+
+
+
+load_dotenv()
+
+open_api_key = os.getenv("OPEN_API_KEY")
+
 
 
 
 class Detector:
     def __init__(self):
-        self.client = OpenAI(api_key = "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")
+        self.client = OpenAI(api_key = open_api_key)
         self.MAX_RETRIES = 10
-        self.plant_types = ['Cactus', 'Basil', 'Thyme', 'Parsley']
+        self.plant_types = ['Cactus', 'Basil', 'Thyme', 'Parsley', 'Gatorade']
 
 
     def detect_plant(self, image):
@@ -21,7 +30,7 @@ class Detector:
                     "content": [
                         {
                         "type": "text",
-                        "text": "Output the plant type and only the plant type in one word 'Cactus', 'Basil', 'Thyme', 'Parsley' if the image's object of interest contains the plant",
+                        "text": "Output the plant type or gatorade and only the plant type in one word 'Cactus', 'Basil', 'Thyme', 'Parsley', or 'Gatorade' if the image's object of interest contains the plant or Gatorade",
                         },
                         {
                         "type": "image_url",
