@@ -7,6 +7,7 @@ type: report
 ---
 
 # Introduction
+
 ### Autonomous Turtlebot with Precision Watering System
 
 This research project focuses on the development of an autonomous Turtlebot platform equipped with a precision water-dispensing system. The robot will navigate a structured indoor environment to identify and assess plants, determining both the necessity and appropriate quantity of water to apply. This system integrates advanced robotic navigation, computer vision, and AI-driven plant recognition to mimic the efficiency of precision agricultural technologies.
@@ -21,6 +22,7 @@ The Turtlebot will:
 - Use **computer vision techniques** (e.g., fiducial marker detection via OpenCV) for localization and orientation.
 - Leverage **OpenAI-based models** for plant type identification, enabling tailored watering strategies based on plant-specific hydration needs.
 - Activate a **water sprayer actuator** to deliver a precise volume of water upon successful identification and analysis of the plant.
+- Remote controlled via an web-based application
 
 ## Inspiration
 
@@ -38,11 +40,250 @@ The objective of this project is to explore the integration of robotics, artific
 - Develop a scalable framework for integrating AI-driven plant identification into robotic systems.
 - Investigate and optimize strategies for precision watering to minimize waste while meeting plant-specific needs.
 - Provide insights into the potential of robotic platforms in precision agriculture and domestic gardening.
+- Design and implement a system that will handle communication between user input from UI to our robot
 
 This project serves as a proof of concept for innovative approaches to automated plant care, with broader implications for agricultural and environmental sustainability.
 
-
 # Challenges
+
+## Flask Server and React Frontend Integration for Plant Care Robot
+
+This section explains how to integrate a Flask backend with a React frontend to manage a plant care robot that detects plants, updates instructions, and provides real-time information. Below is the detailed breakdown of the implementation.
+
+---
+
+## Flask Server
+
+The Flask server provides APIs for handling robot instructions and plant data. It also serves the React frontend and handles cross-origin requests using `flask_cors`.
+
+### System Overview
+
+![alt text](./images/diagram.png)
+
+### Key Features of the Flask Server
+
+1. **Serving the React App**:
+
+   - Serves the static React build files and ensures the app loads correctly.
+
+2. **Managing Instructions**:
+
+   - Handles instructions like `GO_HOME`, `SCAN_ALL`, or navigating to specific plants.
+   - Includes robust validation to ensure valid instructions are processed.
+
+3. **Managing Plant Data**:
+
+   - Provides a list of detected plants and allows updating the plant list dynamically.
+
+4. **Instruction Feedback Loop**:
+   - Periodically prints the current instruction for debugging purposes.
+
+### Flask Code Implementation
+
+```python
+from flask import Flask, request, jsonify, send_from_directory
+import os
+import base64
+import time
+import threading
+from flask_cors import CORS
+
+# Initialize Flask app with static folder for serving React app
+app = Flask(__name__, static_folder='build', static_url_path='')
+CORS(app)
+
+# Global variables
+ALL_INSTRUCTION = ['GO_HOME', 'GO_TO_PLANT_', 'SCAN_ALL', 'NONE']
+INSTRUCTION = 'NONE'
+
+# Example plant data (testing purposes)
+def jpg_to_base64(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+available_plants = [] # [[id, type, img]]
+
+# Function to print current instruction every 5 seconds
+def print_instructions():
+    while True:
+        print(f"Current instruction: {INSTRUCTION}")
+        time.sleep(5)
+
+threading.Thread(target=print_instructions, daemon=True).start()
+
+# Routes
+@app.route('/')
+def serve_react_app():
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/get_plants', methods=['GET'])
+def get_available_plants():
+    return jsonify(available_plants), 200
+
+@app.route('/get_instruction', methods=['GET'])
+def get_instruction():
+    global INSTRUCTION
+    return jsonify({"instruction": INSTRUCTION}), 200
+
+@app.route('/update_instruction', methods=['POST'])
+def update_instruction():
+    global INSTRUCTION
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid input"}), 400
+    instruction = data.get('instruction')
+    if instruction not in ALL_INSTRUCTION and not instruction.startswith('GO_TO_PLANT_'):
+        return jsonify({"error": "Invalid instruction"}), 400
+    INSTRUCTION = instruction
+    return jsonify({"message": "Instruction updated successfully"}), 200
+
+@app.route('/update_plants', methods=['POST'])
+def update_available_plants():
+    global available_plants
+    data = request.get_json()
+    if not data or 'available_plants' not in data:
+        return jsonify({"error": "Invalid input"}), 400
+    available_plants = data['available_plants']
+    return jsonify({"message": "Available plants updated successfully"}), 200
+
+if __name__ == '__main__':
+    app.run(debug=False)
+```
+
+### React Frontend
+
+The React frontend fetches data from the Flask API and provides an interactive UI for monitoring and controlling the robot.
+
+![alt text](./images/front_end.png)
+
+#### Key functions of the React Frontend
+
+```javascript
+useEffect(() => {
+  const fetchPlants = () => {
+    fetch(`${url}/get_plants`)
+      .then((response) => response.json())
+      .then((data) => {
+        // data type: [fiducial_id, plant_type, base_64_image]
+        setPlants(data);
+      })
+      .catch((error) => {
+        console.error('Error fetching plants:', error);
+        showNotification('Failed to fetch plants');
+      });
+  };
+
+  fetchPlants(); // Initial fetch
+  const intervalId = setInterval(fetchPlants, 3000); // Fetch every 3 seconds
+
+  return () => clearInterval(intervalId); // Cleanup on unmount
+}, []);
+
+const safeFetch = async (func, params) => {
+  try {
+    const response = await fetch(`${url}/get_instruction`);
+    const res = await response.json();
+
+    if (res.instruction === 'NONE') {
+      await func(params); // Add await in case func is async
+    } else {
+      showNotification('Robot is busy');
+    }
+  } catch (error) {
+    showNotification('Failed to fetch robot status');
+  }
+};
+
+const handleBackToBase = () => {
+  console.log('Sending instruction to go home');
+  fetch(`${url}/update_instruction`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ instruction: 'GO_HOME' }),
+  })
+    .then(() => showNotification('Robot is returning to base'))
+    .catch(() => showNotification('Failed to send robot home'));
+};
+
+const safeHandleBackToBase = () => {
+  safeFetch(handleBackToBase);
+};
+
+const handleDetectPlants = () => {
+  console.log('Detecting plants');
+  fetch(`${url}/update_instruction`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ instruction: 'SCAN_ALL' }),
+  })
+    .then(() => showNotification('Detecting plants'))
+    .catch(() => showNotification('Failed to detect plants'));
+};
+
+const safeHandleDetectPlants = () => {
+  safeFetch(handleDetectPlants);
+};
+
+const handleSprayPlant = (fiducialId) => {
+  console.log(`Spraying plant ${fiducialId}`);
+  showNotification(`Spraying plant ${fiducialId}`);
+
+  fetch(`${url}/update_instruction`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ instruction: `GO_TO_PLANT_${fiducialId}` }),
+  })
+    .then(() =>
+      showNotification(
+        `Going to ${fiducialId}, plant: ${
+          plants.find((plant) => plant[0] === fiducialId)[1]
+        }`
+      )
+    )
+    .catch(() => showNotification(`Failed to spray plant ${fiducialId}`));
+};
+
+const safeHandleSprayPlant = (fiducialId) => {
+  safeFetch(handleSprayPlant, fiducialId);
+};
+
+const showNotification = (message) => {
+  setSnackbarMessage(message);
+  setOpenSnackbar(true);
+};
+
+const resetRobot = () => {
+  fetch(`${url}/update_instruction`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ instruction: 'NONE' }),
+  })
+    .then(() => showNotification('Robot reset'))
+    .catch(() => showNotification('Failed to reset robot'));
+};
+```
+
+1. **Plant Grid**:
+
+   - Displays the detected plants with images, IDs, and types.
+   - Allows users to spray a specific plant by clicking a button.
+
+2. **Robot Controls**:
+
+   - Provides buttons to reset the robot, detect plants, and return to base.
+
+3. **Notifications**:
+   - Displays success or error messages for user actions.
+4. **Safe requests**:
+   - Make sure the robot ensures its in idle state before sending instructions
 
 ### Plant Detection
 
@@ -115,63 +356,28 @@ class Detector:
             except Exception as e:
                 print(f"Failed attempt {i}: {e}")
 
-    def is_plant(self, image):
-        """
-        Determines whether an image contains any plant.
-
-        Args:
-            image (str): Base64 encoded string of the image.
-
-        Returns:
-            bool: True if the image contains a plant, False otherwise.
-        """
-        for i in range(self.MAX_RETRIES):
-            try:
-                response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "Output in one word 'true' or 'false' if the image contains any plant"},
-                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image}"}}
-                            ],
-                        }
-                    ],
-                )
-                res = response.choices[0].message.content.strip().lower()
-
-                return res == "true"
-            except Exception as e:
-                print(f"Failed attempt {i}: {e}")
 
 ```
 
 #### Explanation of Key Components
 
-##### API Initialization:
-The OpenAI client is initialized using an API key loaded from environment variables via the `dotenv` library. This ensures secure handling of sensitive information.
-
 ##### Plant Type Detection:
+
 The `detect_plant` method sends a base64-encoded image to the OpenAI GPT-4o-mini model, instructing it to identify the object of interest from a predefined list of plant types (e.g., 'Cactus', 'Basil', etc.) or Gatorade.
 
-##### Plant Presence Detection:
-The `is_plant` method determines whether the image contains any plant, returning a boolean value.
-
 ##### Retry Mechanism:
+
 Both methods implement a retry mechanism to handle potential API request failures, ensuring robust performance in real-world applications.
 
 This refinement in plant detection methodology highlights the importance of balancing model accuracy, versatility, and computational feasibility in robotics applications. The GPT-4o-mini model proved to be a game-changer, ensuring robust and reliable plant identification for the Turtlebot's precision watering tasks. It can also detect a variety of objects outside of the plant constraints, including a Gatorade bottle.
 
-Our project culture is to identify hard challenges and break them down with the simplest solutions. We avoided training a large detection model by integrating an advanced vision model.
-
-
 ## Water Sprayer Signaling System:
-Create a signaling channel for the turtlebot to control the sprayer through ROS. This requires hardware level development. 
 
-One of the biggest challenge for this project was to tackle hardware modifications as a team who has no experience in hardward work. 
+Create a signaling channel for the turtlebot to control the sprayer through ROS. This requires hardware level development.
 
-From a high level, the message transmission path that controls the sprayer goes from 
+One of the biggest challenge for this project was to tackle hardware modifications as a team who has no experience in hardward work.
+
+From a high level, the message transmission path that controls the sprayer goes from
 
 ```
 publisher -> subscriber (on rasberry pi) -> arduino uno -> relay -> sprayer
@@ -179,61 +385,64 @@ transmission type: ROS -> serial -> GPIO pin
 ```
 
 ### Components
+
 There are three main components that goes into making the sprayer remote controllable using ROS publisher.
 
 1. arduino uno
-The arduino is responsible for receiving messages from rasberry pi and controlling the relay.
-<img src="./images/arduino.png" alt="arduino" width: "400px">
+   The arduino is responsible for receiving messages from rasberry pi and controlling the relay.
+   <img src="./images/arduino.png" alt="arduino" width: "400px">
 
 2. rasberry pi
-The rasberry pi is where the ROS subscriber is run. It listens to published messages and passes it down to arduino uno.
+   The rasberry pi is where the ROS subscriber is run. It listens to published messages and passes it down to arduino uno.
 
 3. relay
-The relay is responsible for controlling the open and close of the circuit loop which triggers the power of the sprayer.
+   The relay is responsible for controlling the open and close of the circuit loop which triggers the power of the sprayer.
 
-There are 6 ports on the relay. Each of them except NC is required for our setup 
+There are 6 ports on the relay. Each of them except NC is required for our setup
 
-IN: Connects to the Arduino's GPIO pin (e.g., pin 7), this port handles recieving commands from arduino uno. 
+IN: Connects to the Arduino's GPIO pin (e.g., pin 7), this port handles recieving commands from arduino uno.
 DC+: Connects to Arduino 5V, along with DC- this port provides the power to trigger the relay.
 DC-: Connects to Arduino GND.
 COM: Connects to the live wire or signal going to the load (e.g., a light bulb or motor).
 NO: The load should be OFF by default and turn ON when the relay is activated.
-NC: Since we want the relay to be OFF by default, this port is not necessary. 
+NC: Since we want the relay to be OFF by default, this port is not necessary.
 
 <img src="./images/relay.png" alt="relay" width: "400px">
 
 ### Soldering
-We also learned soldering in part of this modification. 
 
-To control the sprayer with the relay, we need to intercept the power source of the sprayer. Since the sprayer is powered by serial connection batteries, we can just cut the wires and reconnect both ends to the relay COM and NO ports. When the relay is on, the connection will be established, completing the circuit loop and trigger the sprayer. 
+We also learned soldering in part of this modification.
+
+To control the sprayer with the relay, we need to intercept the power source of the sprayer. Since the sprayer is powered by serial connection batteries, we can just cut the wires and reconnect both ends to the relay COM and NO ports. When the relay is on, the connection will be established, completing the circuit loop and trigger the sprayer.
 
 <img src="./images/solder.png" alt="solder" width: "400px">
-
 
 More details on our code implementation in the faq section.
 [details](docs/faq/hardware/external_actuator_control.md)
 
-## Water Spraying Mechanism Control: 
+## Water Spraying Mechanism Control:
+
 Verifying that the water spraying actuator can be accurately triggered at the right time and location. The challenge is to time the activation properly and test its range to ensure it only targets specific areas.
 
-## Autonomous Navigation: 
-Testing the Turtlebot’s ability to navigate and avoid obstacles reliably. 
+## Autonomous Navigation:
+
+Testing the Turtlebot’s ability to navigate and avoid obstacles reliably.
 (Fiducial nav / user gets to decide which to navigate to)
 
-
 ## Software
+
 Technical descriptions, illustrations
 Discussion of interesting algorithms, modules, techniques
 Guide on how to use the code written
 Tables listing names and one sentence purpose of each of these:
-    Python source files
-    Nodes created
-    Topics and their messages
-
+Python source files
+Nodes created
+Topics and their messages
 
 # Story of the project.
+
 How it unfolded, how the team worked together
 Your own assessment
 problems that were solved, pivots that had to be taken
 
-pivoting from using a claw to 
+pivoting from using a claw to
