@@ -7,7 +7,7 @@ import time
 class ArduinoController:
     def __init__(self):
         # Set up the serial connection to the Arduino
-        self.arduino = serial.Serial('/dev/arduino-uno', 9600, timeout=1)  # Replace with your port
+        self.arduino = serial.Serial('/dev/arduino-uno', 9600, timeout=1)  
         time.sleep(2)  # Allow time for the connection to initialize
 
         # Initialize the ROS subscriber

@@ -21,6 +21,7 @@ The Turtlebot will:
 - Use **computer vision techniques** (e.g., fiducial marker detection via OpenCV) for localization and orientation.
 - Leverage **OpenAI-based models** for plant type identification, enabling tailored watering strategies based on plant-specific hydration needs.
 - Activate a **water sprayer actuator** to deliver a precise volume of water upon successful identification and analysis of the plant.
+- Remote controlled via an web-based application
 
 ## Inspiration
 
@@ -38,11 +39,238 @@ The objective of this project is to explore the integration of robotics, artific
 - Develop a scalable framework for integrating AI-driven plant identification into robotic systems.
 - Investigate and optimize strategies for precision watering to minimize waste while meeting plant-specific needs.
 - Provide insights into the potential of robotic platforms in precision agriculture and domestic gardening.
+- Design and implement a system that will handle communication between user input from UI to our robot
 
 This project serves as a proof of concept for innovative approaches to automated plant care, with broader implications for agricultural and environmental sustainability.
 
 
 # Challenges
+
+## Flask Server and React Frontend Integration for Plant Care Robot
+
+This section explains how to integrate a Flask backend with a React frontend to manage a plant care robot that detects plants, updates instructions, and provides real-time information. Below is the detailed breakdown of the implementation.
+
+---
+
+## Flask Server
+
+The Flask server provides APIs for handling robot instructions and plant data. It also serves the React frontend and handles cross-origin requests using `flask_cors`.
+
+### Key Features of the Flask Server
+
+1. **Serving the React App**:
+   - Serves the static React build files and ensures the app loads correctly.
+
+2. **Managing Instructions**:
+   - Handles instructions like `GO_HOME`, `SCAN_ALL`, or navigating to specific plants.
+   - Includes robust validation to ensure valid instructions are processed.
+
+3. **Managing Plant Data**:
+   - Provides a list of detected plants and allows updating the plant list dynamically.
+
+4. **Instruction Feedback Loop**:
+   - Periodically prints the current instruction for debugging purposes.
+
+### Flask Code Implementation
+
+```python
+from flask import Flask, request, jsonify, send_from_directory
+import os
+import base64
+import time
+import threading
+from flask_cors import CORS
+
+# Initialize Flask app with static folder for serving React app
+app = Flask(__name__, static_folder='build', static_url_path='')
+CORS(app)
+
+# Global variables
+ALL_INSTRUCTION = ['GO_HOME', 'GO_TO_PLANT_', 'SCAN_ALL', 'NONE']
+INSTRUCTION = 'NONE'
+
+# Example plant data (testing purposes)
+def jpg_to_base64(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+available_plants = [ 
+    ['108', 'Cactus', jpg_to_base64('images/cactus.jpg')],
+    ['109', 'Basil', jpg_to_base64('images/basil.jpg')],
+    ['110', 'Thyme', jpg_to_base64('images/thyme.jpg')],
+    ['111', 'Cactus', jpg_to_base64('images/cactus_2.jpg')],
+]
+
+# Function to print current instruction every 5 seconds
+def print_instructions():
+    while True:
+        print(f"Current instruction: {INSTRUCTION}")
+        time.sleep(5)
+
+threading.Thread(target=print_instructions, daemon=True).start()
+
+# Routes
+@app.route('/')
+def serve_react_app():
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/get_plants', methods=['GET'])
+def get_available_plants():
+    return jsonify(available_plants), 200
+
+@app.route('/get_instruction', methods=['GET'])
+def get_instruction():
+    global INSTRUCTION
+    return jsonify({"instruction": INSTRUCTION}), 200
+
+@app.route('/update_instruction', methods=['POST'])
+def update_instruction():
+    global INSTRUCTION
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid input"}), 400
+    instruction = data.get('instruction')
+    if instruction not in ALL_INSTRUCTION and not instruction.startswith('GO_TO_PLANT_'):
+        return jsonify({"error": "Invalid instruction"}), 400
+    INSTRUCTION = instruction
+    return jsonify({"message": "Instruction updated successfully"}), 200
+
+@app.route('/update_plants', methods=['POST'])
+def update_available_plants():
+    global available_plants
+    data = request.get_json()
+    if not data or 'available_plants' not in data:
+        return jsonify({"error": "Invalid input"}), 400
+    available_plants = data['available_plants']
+    return jsonify({"message": "Available plants updated successfully"}), 200
+
+if __name__ == '__main__':
+    app.run(debug=False)
+```
+
+### React Frontend
+
+The React frontend fetches data from the Flask API and provides an interactive UI for monitoring and controlling the robot.
+
+![alt text](./images/front_end.png)
+
+#### Key Features of the React Frontend
+
+```javascript
+import React, { useState, useEffect } from 'react';
+import { Box, Button, Card, CardContent, CardMedia, Container, Grid, Typography, IconButton, Alert, Snackbar } from '@mui/material';
+import { Home, Leaf, Droplet } from 'lucide-react';
+
+const url = 'server url';
+
+export default function App() {
+  const [plants, setPlants] = useState([]);
+  const [openSnackbar, setOpenSnackbar] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+
+  useEffect(() => {
+    const fetchPlants = () => {
+      fetch(`${url}/get_plants`)
+        .then((response) => response.json())
+        .then((data) => setPlants(data))
+        .catch(() => showNotification('Failed to fetch plants'));
+    };
+
+    fetchPlants();
+    const intervalId = setInterval(fetchPlants, 3000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const safeFetch = async (func, params) => {
+    try {
+      const response = await fetch(`${url}/get_instruction`);
+      const res = await response.json();
+
+      if (res.instruction === 'NONE') {
+        await func(params);
+      } else {
+        showNotification('Robot is busy');
+      }
+    } catch {
+      showNotification('Failed to fetch robot status');
+    }
+  };
+
+  const handleBackToBase = () => {
+    fetch(`${url}/update_instruction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction: 'GO_HOME' }),
+    }).then(() => showNotification('Robot is returning to base'))
+      .catch(() => showNotification('Failed to send robot home'));
+  };
+
+  const handleDetectPlants = () => {
+    fetch(`${url}/update_instruction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction: 'SCAN_ALL' }),
+    }).then(() => showNotification('Detecting plants'))
+      .catch(() => showNotification('Failed to detect plants'));
+  };
+
+  const handleSprayPlant = (fiducialId) => {
+    fetch(`${url}/update_instruction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction: `GO_TO_PLANT_${fiducialId}` }),
+    }).then(() => showNotification(`Spraying plant ${fiducialId}`))
+      .catch(() => showNotification(`Failed to spray plant ${fiducialId}`));
+  };
+
+  const showNotification = (message) => {
+    setSnackbarMessage(message);
+    setOpenSnackbar(true);
+  };
+
+  return (
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', py: 4 }}>
+      <Container maxWidth="lg">
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
+          <Typography variant="h4">Plant Care Robot</Typography>
+        </Box>
+        <Grid container spacing={3}>
+          {plants.map((plant) => (
+            <Grid item xs={12} sm={6} md={4} key={plant[0]}>
+              <Card>
+                <CardMedia component="img" image={`data:image/jpeg;base64,${plant[2]}`} />
+                <CardContent>
+                  <Typography variant="h6">{plant[1]}</Typography>
+                  <IconButton onClick={() => handleSprayPlant(plant[0])}>
+                    <Droplet />
+                  </IconButton>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Container>
+    </Box>
+  );
+}
+```
+
+1. **Plant Grid**:
+   - Displays the detected plants with images, IDs, and types.
+   - Allows users to spray a specific plant by clicking a button.
+
+2. **Robot Controls**:
+   - Provides buttons to reset the robot, detect plants, and return to base.
+
+3. **Notifications**:
+   - Displays success or error messages for user actions.
+4. **Safe requests**:
+   - Make sure the robot ensures its in idle state before sending instructions
+
+
+
+
 
 ### Plant Detection
 

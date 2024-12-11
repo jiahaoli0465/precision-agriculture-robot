@@ -32,6 +32,7 @@ class Sprayer:
         self.dist = None
         self.yaw = None
         self.pose = None
+        self.base_pose = None
         self.right_dist = float('inf')
         self.left_dist = float('inf')
         self.front_dist = float('inf')
@@ -43,6 +44,9 @@ class Sprayer:
         self.camera_control = CameraControl()
 
         # self.fiducial_ids = [100, 108]
+
+        self.fiducial_plant_image_map = {} #id: [plant_type, image]
+        self.spray_time = {'Cactus': 1.5, 'Thyme':2, 'Basil': 2, 'Parsley': 3, 'Gatorade': 5}
         self.count = 0
 
         self.angular_rate = 2.0
@@ -54,6 +58,8 @@ class Sprayer:
     def odom_cb(self, msg):
         cur_pose = msg.pose.pose
         self.pose = cur_pose.position
+        if not self.base_pose:
+            self.base_pose = cur_pose.position
 
 
     def my_odom_cb(self, msg):
@@ -161,19 +167,23 @@ class Sprayer:
         twist.linear.x = 0.0
         self.cmd_vel_pub.publish(twist)
 
-    def process_plant(self):
+    def process_plant(self, pin_id):
         image = self.camera_control.capture_image()
         is_detected, plant_type  = self.detector.detect_plant(image)
         if is_detected or plant_type == 'Gatorade':
-            self.turn(0.1)
-            print('spraying...')
-            time.sleep(2)
-            self.spray_water()
-            print('spraying done')
+            self.fiducial_plant_image_map[pin_id] = [plant_type, image]
+            # self.turn(0.1)
+            # print('spraying...')
+            # time.sleep(2)
+            # self.spray_water()
+            # print('spraying done')
         else:
-            print('not a plant not spraying')
-            time.sleep(2)
-            print('spraying over')
+            print('not a plant try again')
+            time.sleep(1)
+            image = self.camera_control.capture_image()
+            is_detected, plant_type  = self.detector.detect_plant(image)
+            if is_detected or plant_type == 'Gatorade':
+                self.fiducial_plant_image_map[pin_id] = [plant_type, image]
 
     def get_pin_id(self):
         if self.count == 0:
@@ -221,7 +231,7 @@ class Sprayer:
                 
 
                 # self.spray_water()
-                self.process_plant()
+                self.process_plant(pin_id)
 
                 time.sleep(2)
 
@@ -234,7 +244,7 @@ class Sprayer:
 
 
                 print('complete navigation to ', pin_id)
-
+                self.back_to_base()
 
             break
             # self.cmd_vel_pub.publish(twist)
@@ -271,6 +281,9 @@ class Sprayer:
         """Normalize angle to [-pi, pi]."""
         pi = math.pi
         return (angle + pi) % (2 * pi) - pi
+
+    def back_to_base(self):
+        pass
 
     def preprocessor(self, all_ranges):
         '''
@@ -321,15 +334,83 @@ class Sprayer:
             pass
 
 
+# if __name__ == "__main__":
+#     try:
+#         sprayer = Sprayer()
+#         sprayer.locate()
+#         # sprayer.spray_water(30) 
+#         # sprayer.test()
+#         sprayer.relay_pub.publish("RELAY_OFF")  
+
+#     except rospy.ROSInterruptException:
+#         sprayer.relay_pub.publish("RELAY_OFF")  
+#         rospy.loginfo("Shutting down")
+# BLOW AND SUCK ON THAT THING if get stuck  
+url = 'get a url please'
 if __name__ == "__main__":
     try:
         sprayer = Sprayer()
-        sprayer.locate()
-        # sprayer.spray_water(30) 
-        # sprayer.test()
+        # sprayer.locate()
+        PREV_INSTRUCTION = 'NONE'
+        while not rospy.is_shutdown():
+            try:
+                # Make request to Flask server
+                # TODO: Since internet unstable all these post/get needs retries
+
+                response = requests.get(f'{url}/get_instruction', timeout=1.0)
+                if response.status_code == 200:
+                    instruction = response.json().get('instruction', 'NONE')
+                    if instruction != PREV_INSTRUCTION:
+
+                        if instruction == 'GO_HOME':
+                            rospy.loginfo("Received GO_HOME instruction")
+                            # Add home movement logic here
+                            sprayer.back_to_base()
+
+                            # After completing, reset instruction
+                            requests.post(f'{url}/update_instruction', 
+                                        json={'instruction': 'NONE'})
+                        
+                        elif instruction == 'SCAN_ALL':
+                            rospy.loginfo("Received SCAN_ALL instruction")
+                            # turn 360 scanning for fiducials
+                            sprayer.locate()
+
+                            requests.post(f'{url}/update_instruction', 
+                                        json={'instruction': 'NONE'})
+
+                        elif instruction.startswith('GO_TO_PLANT_'):
+                            fiducial_id = instruction.split('_')[-1]
+                            # if any(fiducial_id == plant[0] for plant in available_plants):
+
+                            rospy.loginfo("Received GO_TO_PLANT instruction")
+
+                            sprayer.face_pin(fiducial_id)
+                            time.sleep(1)
+                            sprayer.move_to_pin(fiducial_id)
+                            sprayer.turn(0.1)
+                            spray_time = sprayer.spray_time[sprayer.fiducial_plant_image_map[fiducial_id]]
+                            sprayer.spray_water(spray_time)
+
+                            sprayer.back_to_base()
+
+
+
+
+                    
+
+                            requests.post(f'{url}/update_instruction', 
+                                        json={'instruction': 'NONE'})
+
+
+            except requests.exceptions.RequestException as e:
+                rospy.logwarn(f"Failed to fetch instructions: {e}")
+            
+            # Add small delay to prevent flooding
+            rospy.sleep(0.5)
+
         sprayer.relay_pub.publish("RELAY_OFF")  
 
     except rospy.ROSInterruptException:
         sprayer.relay_pub.publish("RELAY_OFF")  
         rospy.loginfo("Shutting down")
-# BLOW AND SUCK ON THAT THING if get stuck  c
