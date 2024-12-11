@@ -171,6 +171,13 @@ Create a signaling channel for the turtlebot to control the sprayer through ROS.
 
 One of the biggest challenge for this project was to tackle hardware modifications as a team who has no experience in hardward work. 
 
+From a high level, the message transmission path that controls the sprayer goes from 
+
+```
+publisher -> subscriber (on rasberry pi) -> arduino uno -> relay -> sprayer
+transmission type: ROS -> serial -> GPIO pin
+```
+
 ### Components
 There are three main components that goes into making the sprayer remote controllable using ROS publisher.
 
@@ -196,16 +203,14 @@ NC: Since we want the relay to be OFF by default, this port is not necessary.
 <img src="./images/relay.png" alt="relay" width: "400px">
 
 ### Soldering
-We also learned soldering in part of this modification. There are two different approaches we can take. 
+We also learned soldering in part of this modification. 
 
-1. Directely tap into the trigger portion of the sprayer and 
-
-
+To control the sprayer with the relay, we need to intercept the power source of the sprayer. Since the sprayer is powered by serial connection batteries, we can just cut the wires and reconnect both ends to the relay COM and NO ports. When the relay is on, the connection will be established, completing the circuit loop and trigger the sprayer. 
 
 <img src="./images/solder.png" alt="solder" width: "400px">
 
 
-
+More details on our code implementation in the faq section.
 [details](docs/faq/hardware/external_actuator_control.md)
 
 ## Water Spraying Mechanism Control: 
