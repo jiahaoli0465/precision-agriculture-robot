@@ -31,13 +31,13 @@ available_plants = [
 
 
 
-# Function to print the current instruction every 5 seconds
-def print_instructions():
-    while True:
-        print(f"Current instruction: {INSTRUCTION}")
-        time.sleep(5)
+# # Function to print the current instruction every 5 seconds
+# def print_instructions():
+#     while True:
+#         print(f"Current instruction: {INSTRUCTION}")
+#         time.sleep(5)
 
-threading.Thread(target=print_instructions, daemon=True).start()
+# threading.Thread(target=print_instructions, daemon=True).start()
 
 
 # Serve React app
@@ -55,6 +55,9 @@ def serve_react_app():
 #         return send_from_directory(app.static_folder, path)
 #     else:
 #         return send_from_directory(app.static_folder, 'index.html')
+@app.route('/hi', methods=['GET'])
+def hello():
+    return 'hello'
 
 @app.route('/get_plants', methods=['GET'])
 def get_available_plants():
@@ -133,4 +136,7 @@ def update_available_plants():
 
 if __name__ == '__main__':
     # Set debug to False for production
-    app.run(debug=False)
+    # app.run(debug=False)
+    app.run(host='0.0.0.0', port=6969, debug=True)
+
+    

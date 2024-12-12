@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import { Home, Leaf, Droplet } from 'lucide-react';
 
-const url = 'http://localhost:5000';
+const url = 'http://172.20.111.126:6969';
 
 export default function App() {
   const [plants, setPlants] = useState([]);
@@ -131,6 +131,8 @@ export default function App() {
       .catch(() => showNotification('Failed to reset robot'));
   };
 
+  const isMobile = window.innerWidth < 600;
+
   return (
     <Box
       sx={{
@@ -141,74 +143,150 @@ export default function App() {
     >
       <Container maxWidth="lg">
         {/* Header */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 4,
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Leaf size={40} color="#6CAF45" />
+        {isMobile ? (
+          <Box marginBottom={3}>
             <Typography
               variant="h4"
               component="h1"
               sx={{
                 fontWeight: 'bold',
                 color: 'primary.main',
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              Plant Care Robot
+              <>
+                <Leaf size={40} color="#6CAF45" />
+              </>
+              Plant Care
             </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="contained"
-              color="warning"
-              onClick={resetRobot}
+            <Box
               sx={{
-                borderRadius: 3,
-                textTransform: 'none',
-                fontSize: '1.1rem',
+                display: 'flex',
+                justifyContent: 'center',
+                gap: 2,
+                mt: 2,
               }}
             >
-              Reset Robot
-            </Button>
+              <Button
+                variant="contained"
+                color="warning"
+                onClick={resetRobot}
+                sx={{
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                }}
+              >
+                Reset
+              </Button>
 
-            <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<Leaf />}
-              onClick={safeHandleDetectPlants}
-              sx={{
-                px: 4,
-                py: 1.5,
-                borderRadius: 3,
-                textTransform: 'none',
-                fontSize: '1.1rem',
-              }}
-            >
-              Detect Plants
-            </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                // startIcon={<Leaf />}
+                onClick={safeHandleDetectPlants}
+                sx={{
+                  px: 4.5,
+                  py: 1.5,
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                }}
+              >
+                Detect
+              </Button>
 
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<Home />}
-              onClick={safeHandleBackToBase}
-              sx={{
-                px: 4,
-                py: 1.5,
-                borderRadius: 3,
-                textTransform: 'none',
-                fontSize: '1.1rem',
-              }}
-            >
-              Return to Base
-            </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                // startIcon={<Home />}
+                onClick={safeHandleBackToBase}
+                sx={{
+                  // px: 1.5,
+                  // py: 1.5,
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                }}
+              >
+                {/* Base */}
+                <Home />
+              </Button>
+            </Box>
           </Box>
-        </Box>
+        ) : (
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 4,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Leaf size={40} color="#6CAF45" />
+              <Typography
+                variant="h4"
+                component="h1"
+                sx={{
+                  fontWeight: 'bold',
+                  color: 'primary.main',
+                }}
+              >
+                Plant Care Robot
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="contained"
+                color="warning"
+                onClick={resetRobot}
+                sx={{
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                }}
+              >
+                Reset Robot
+              </Button>
+
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<Leaf />}
+                onClick={safeHandleDetectPlants}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                }}
+              >
+                Detect Plants
+              </Button>
+
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<Home />}
+                onClick={safeHandleBackToBase}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                }}
+              >
+                Return to Base
+              </Button>
+            </Box>
+          </Box>
+        )}
 
         {/* Plants Grid */}
         <Grid container spacing={3}>
@@ -228,7 +306,6 @@ export default function App() {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                     transition: 'transform 0.2s, box-shadow 0.2s',
                     '&:hover': {
-                      transform: 'translateY(-4px)',
                       boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
                     },
                   }}
