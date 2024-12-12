@@ -7,6 +7,7 @@ import cv_bridge
 from sensor_msgs.msg import CompressedImage, LaserScan
 from geometry_msgs.msg import Twist, Point
 from nav_msgs.msg import Odometry
+from request_utils import make_get_request, make_post_request
 
 from detector import Detector
 from camera_control import CameraControl
@@ -346,7 +347,7 @@ class Sprayer:
 #         sprayer.relay_pub.publish("RELAY_OFF")  
 #         rospy.loginfo("Shutting down")
 # BLOW AND SUCK ON THAT THING if get stuck  
-url = 'get a url please'
+url = 'http://172.20.111.126:6969/'
 if __name__ == "__main__":
     try:
         sprayer = Sprayer()
