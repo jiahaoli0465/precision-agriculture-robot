@@ -80,6 +80,6 @@ if __name__ == '__main__':
     print('running mapper')
     mapper = Mapper()
     # The ids of the fiducials the `Mapper` instance should map.
-    fid_ids = [106]
+    fid_ids = [109, 104, 106]
     mapper.set_pins(fid_ids)
     mapper.run()

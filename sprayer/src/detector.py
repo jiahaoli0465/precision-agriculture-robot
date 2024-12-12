@@ -16,7 +16,7 @@ class Detector:
     def __init__(self):
         self.client = OpenAI(api_key = open_api_key)
         self.MAX_RETRIES = 10
-        self.plant_types = ['Cactus', 'Basil', 'Thyme', 'Parsley', 'Gatorade']
+        self.plant_types = ['Cactus', 'Basil', 'Thyme', 'Parsley', 'Bottle']
 
 
     def detect_plant(self, image):
@@ -30,7 +30,7 @@ class Detector:
                     "content": [
                         {
                         "type": "text",
-                        "text": "Output the plant type or gatorade and only the plant type in one word 'Cactus', 'Basil', 'Thyme', 'Parsley', or 'Gatorade' if the image's object of interest contains the plant or Gatorade",
+                        "text": "Output the plant type or Bottle and only the plant type in one word 'Cactus', 'Basil', 'Thyme', 'Parsley', or 'Bottle' if the image's object of interest contains the plant or Bottle",
                         },
                         {
                         "type": "image_url",
@@ -42,7 +42,9 @@ class Detector:
                     }
                 ],
                 )
+                
                 res = response.choices[0].message.content
+                print('gpt response: ' + res)
 
                 if res in self.plant_types:
                     return True, res

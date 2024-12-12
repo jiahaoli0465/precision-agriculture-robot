@@ -3,7 +3,7 @@ from functools import wraps
 import time
 import rospy
 
-def retry_request(max_retries=3, base_delay=1):
+def retry_request(max_retries=10, base_delay=0.4):
     """
     Decorator that implements retry logic for HTTP requests with exponential backoff.
     
