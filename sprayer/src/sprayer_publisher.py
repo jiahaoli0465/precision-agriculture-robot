@@ -376,6 +376,19 @@ if __name__ == "__main__":
                             # turn 360 scanning for fiducials
                             sprayer.locate()
 
+                            fiducial_plant_image_map = sprayer.fiducial_plant_image_map
+                            
+                            plant_list = []
+                            for fid in fiducial_plant_image_map:
+                                plant_list.append([
+                                    fid,  # fiducial id
+                                    fiducial_plant_image_map[fid][0],  # plant type
+                                    fiducial_plant_image_map[fid][1]   # base64 image
+                                ])
+
+                            requests.post(f'{url}/update_plants', 
+                                        json={'available_plants': plant_list})
+
                             requests.post(f'{url}/update_instruction', 
                                         json={'instruction': 'NONE'})
 
