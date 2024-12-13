@@ -120,12 +120,12 @@ export default function App() {
   };
 
   const resetRobot = () => {
-    fetch(`${url}/update_instruction`, {
+    fetch(`${url}/reset_all`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ instruction: 'NONE' }),
+      // body: JSON.stringify({ instruction: 'NONE' }),
     })
       .then(() => showNotification('Robot reset'))
       .catch(() => showNotification('Failed to reset robot'));

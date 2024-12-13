@@ -21,13 +21,14 @@ def jpg_to_base64(image_path):
 
 
 # testing data
-available_plants = [ 
-    ['108', 'Cactus', jpg_to_base64('images/cactus.jpg')],
-    ['109', 'Basil', jpg_to_base64('images/basil.jpg')],
-    ['110', 'Thyme', jpg_to_base64('images/thyme.jpg')],
-    ['111', 'Cactus', jpg_to_base64('images/cactus_2.jpg')],
+# available_plants = [ 
+#     ['108', 'Cactus', jpg_to_base64('images/cactus.jpg')],
+#     ['109', 'Basil', jpg_to_base64('images/basil.jpg')],
+#     ['110', 'Thyme', jpg_to_base64('images/thyme.jpg')],
+#     ['111', 'Cactus', jpg_to_base64('images/cactus_2.jpg')],
 
-]
+# ]
+available_plants = []
 
 
 
@@ -80,6 +81,15 @@ def get_instruction():
     global INSTRUCTION
     return jsonify({"instruction": INSTRUCTION}), 200
 
+@app.route('/reset_all', methods=['POST'])
+def reset_all():
+    global INSTRUCTION
+    global available_plants
+
+    INSTRUCTION = 'NONE'
+    available_plants = []
+    return jsonify({"message": "All data reset successfully"}), 200
+
 @app.route('/update_instruction', methods=['POST'])
 def update_instruction():
     """Update the current instruction.
@@ -108,10 +118,11 @@ def update_instruction():
         INSTRUCTION = 'NONE'
     elif instruction.startswith('GO_TO_PLANT_'):
         fiducial_id = instruction.split('_')[-1]
-        if any(fiducial_id == plant[0] for plant in available_plants):
-            INSTRUCTION = instruction
-        else:
-            return jsonify({"error": "Invalid plant"}), 400
+        INSTRUCTION = instruction
+        # if any(fiducial_id == str(plant[0]) for plant in available_plants):
+        #     INSTRUCTION = instruction
+        # else:
+        #     return jsonify({"error": "Invalid plant"}), 400
     else:
         return jsonify({"error": "Invalid instruction"}), 400
 
