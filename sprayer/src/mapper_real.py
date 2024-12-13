@@ -5,8 +5,7 @@ import tf2_ros
 from tf.transformations import quaternion_from_euler
 from geometry_msgs.msg import TransformStamped
 
-FID_IDS = [109, 104, 106, 100]
-
+FID_IDS = [104, 106, 108]
 
 class Mapper:
     """

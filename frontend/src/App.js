@@ -120,12 +120,11 @@ export default function App() {
   };
 
   const resetRobot = () => {
-    fetch(`${url}/update_instruction`, {
+    fetch(`${url}/reset_all`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ instruction: 'NONE' }),
     })
       .then(() => showNotification('Robot reset'))
       .catch(() => showNotification('Failed to reset robot'));
@@ -186,7 +185,6 @@ export default function App() {
               <Button
                 variant="contained"
                 color="secondary"
-                // startIcon={<Leaf />}
                 onClick={safeHandleDetectPlants}
                 sx={{
                   px: 4.5,
@@ -202,11 +200,8 @@ export default function App() {
               <Button
                 variant="contained"
                 color="primary"
-                // startIcon={<Home />}
                 onClick={safeHandleBackToBase}
                 sx={{
-                  // px: 1.5,
-                  // py: 1.5,
                   borderRadius: 3,
                   textTransform: 'none',
                   fontSize: '1rem',

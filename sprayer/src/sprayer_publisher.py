@@ -1,20 +1,20 @@
 import rospy
 import time
 import math
-from std_msgs.msg import String
 import cv2
 import cv_bridge
-from sensor_msgs.msg import CompressedImage, LaserScan
-from geometry_msgs.msg import Twist, Point
-from nav_msgs.msg import Odometry
-from request_utils import make_get_request, make_post_request
-
-from detector import Detector
-from camera_control import CameraControl
 import time
 import tf2_ros
 import sys
 import requests
+from std_msgs.msg import String
+from sensor_msgs.msg import CompressedImage, LaserScan
+from geometry_msgs.msg import Twist, Point
+from nav_msgs.msg import Odometry
+from request_utils import make_get_request, make_post_request
+from detector import Detector
+from camera_control import CameraControl
+
 
 SPEED = 0.2
 # gap between the robot and a plant
@@ -24,8 +24,7 @@ MIN_TURN_SPEED = 0.1
 MAX_TURN_SPEED = 0.2
 THRESHOLD = 0.5
 BASE = 104
-FIDUCIAL_IDS = [109, 104, 100, 106]
-
+FIDUCIAL_IDS = [104, 106, 108]
 
 
 class Sprayer:
@@ -33,11 +32,9 @@ class Sprayer:
         rospy.init_node('sprayer_node', anonymous=True)
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
         self.my_odom_sub = rospy.Subscriber('my_odom', Point, self.my_odom_cb)
-
         self.relay_pub = rospy.Publisher('/relay_control', String, queue_size=10)
         self.dist = None
         self.yaw = None
-        self.base_pose = None
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -48,10 +45,6 @@ class Sprayer:
         self.fiducial_plant_image_map = {} #id: [plant_type, image]
         self.spray_time = {'Cactus': 1, 'Grass':2, 'Succulent': 2, 'Parsley': 3, 'Bottle': 0}
         self.count = 0
-
-        self.angular_rate = 2.0
-        self.linear_rate = 1.2
-
 
         self.rate = rospy.Rate(RATE)  
 
@@ -84,8 +77,8 @@ class Sprayer:
         self.relay_pub.publish(msg[0])  
     
     def normalize(self, angle):
-        return (angle + math.pi) % (2 * math.pi) - math.pi  
-    
+        """Normalize angle to [-pi, pi]."""
+        return (angle + math.pi) % (2 * math.pi) - math.pi
     
     def face_pin(self, pin_id):
         """
@@ -104,9 +97,7 @@ class Sprayer:
                 target_heading = target_heading if target_heading >= 0 else 2 * math.pi + target_heading  # Normalize to [0, 2pi]
                 yaw_diff = (target_heading + initial_yaw) - self.yaw
                 yaw_diff = (yaw_diff + math.pi) % (2 * math.pi) - math.pi  # Normalize to [-pi, pi]
-                # self.turn(target_yaw)
                 if abs(yaw_diff) < 0.05:
-                    logger.info(f"Facing pin {pin_id} within threshold.")
                     break  # If aligned, exit the loop
                 twist.angular.z = yaw_diff * 0.5  # Adjust angular velocity based on the yaw difference
                 twist.linear.x = 0.0  # No linear movement while rotating
@@ -151,7 +142,6 @@ class Sprayer:
         twist.angular.z = 0.0
         self.cmd_vel_pub.publish(twist)
 
-
     def process_plant(self, pin_id):
         image = self.camera_control.capture_image()
         is_detected, plant_type  = self.detector.detect_plant(image)
@@ -179,7 +169,7 @@ class Sprayer:
         print('scanning')
         twist = Twist()
         twist.angular.z = 0.4  # Set a low angular velocity for scanning
-        scan_duration = rospy.Duration(10)  # Scan for 10 seconds
+        scan_duration = rospy.Duration(20)  # Scan for 10 seconds
         start_time = rospy.Time.now()
         while rospy.Time.now() - start_time < scan_duration and not rospy.is_shutdown():
             self.cmd_vel_pub.publish(twist)
@@ -203,8 +193,6 @@ class Sprayer:
                     continue
                 self.face_pin(pin_id)
                 self.move_to_pin(pin_id)
-
-                # self.spray_water()
                 self.process_plant(pin_id)
 
                 print('complete navigation to ', pin_id)
@@ -216,91 +204,7 @@ class Sprayer:
             # self.cmd_vel_pub.publish(twist)
         twist.linear.x = 0.0
 
-    # def turn(self, target_yaw):
-    #     """
-    #     Turns the robot to heading `target_yaw`.
-    #     """
-    #     twist = Twist()
 
-    #     if not self.yaw: return
-    #     target_yaw = self.yaw + target_yaw
-    #     target_yaw = self.normalize(target_yaw)
-
-    #     while not rospy.is_shutdown():
-    #         if self.yaw:
-    #             difference = self.normalize(target_yaw - self.yaw)
-    #             if abs(difference) < 0.02:
-    #                 twist.angular.z = 0.0
-    #                 twist.linear.x = 0.0
-    #                 rospy.loginfo("Finish turning to %d", target_yaw)
-    #                 break
-    #             else:
-    #                 twist.linear.x = 0.0
-    #                 turn_speed = difference * 0.5
-                    
-    #                 if turn_speed < MIN_TURN_SPEED:
-    #                     twist.angular.z = MIN_TURN_SPEED
-    #                 elif turn_speed > MAX_TURN_SPEED:
-    #                     twist.angular.z = MAX_TURN_SPEED
-    #                 else:
-    #                     twist.angular.z = turn_speed
-
-    #             self.cmd_vel_pub.publish(twist)
-    #         self.rate.sleep()
-
-    #     twist.linear.x = 0.0
-
-    def normalize(self, angle):
-        """Normalize angle to [-pi, pi]."""
-        return (angle + math.pi) % (2 * math.pi) - math.pi
-
-    def preprocessor(self, all_ranges):
-        '''
-        return ranges as the average of groups of 12 values, 30 groups total
-        0,7,14,22 would roughly be the index of front left back right, since lidar is counterclockwise
-        '''
-        ranges = [float('inf')]*30 
-        range_num = len(all_ranges) 
-        batch_range =  range_num // 30 
-        ranges_index = 0
-        index = -6
-        sum = 0
-        sum_list = []
-        batch = 0
-        actual = 0
-
-        for i in range(241):
-            curr = all_ranges[index]
-            if curr != float('-inf') and not math.isnan(curr):
-                sum += curr
-                # sum_list.append(curr)
-                actual += 1
-            batch += 1
-            index += 1
-            if batch == batch_range:
-                if actual != 0:
-                    ranges[ranges_index] = sum/actual
-                    # ranges[ranges_index] = min(sum_list)
-
-                ranges_index += 1
-                sum = 0
-                batch = 0
-                actual = 0
-
-        # calculate average for the extra scanner points
-        for i in range(241, range_num):
-            curr = all_ranges[index]
-            if curr != float('-inf') and not math.isnan(curr):
-                sum += curr
-                actual += 1
-        if actual != 0:
-            ranges[29] = sum/actual
-
-        return ranges
-
-    def test(self):
-        while not rospy.is_shutdown():
-            pass
 
 url = 'http://172.20.111.126:6969/'
 # BLOW AND SUCK ON THAT THING if get stuck  
@@ -397,12 +301,10 @@ if __name__ == "__main__":
 
     else:
         try:
-            # sprayer.locate()
-            # sprayer.spray_water(30) 
-            # sprayer.test()
+
             sprayer.face_pin(BASE)
             sprayer.move_to_pin(BASE)
-            # sprayer.relay_pub.publish("RELAY_OFF")  
+
         except rospy.ROSInterruptException:
             pass
 
