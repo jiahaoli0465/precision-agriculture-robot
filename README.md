@@ -2,6 +2,25 @@
 
 This research project focuses on the development of an autonomous Turtlebot platform equipped with a precision water-dispensing system.
 
+## Usage
+### onboard (rasberry pi)
+```
+bringup; relaysub
+```
+### real:mutant (local machine) 
+```
+roslaunch fiducial_nav fiducials_real.launch
+python sprayer_publisher.py 
+```
+### start server /backend
+```
+python app.py
+```
+
+### web interface
+navigate to http://172.20.111.126:6969/
+
+
 
 ## Links
 FAQ: 

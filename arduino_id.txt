@@ -1,8 +1,11 @@
 
+sudo nano 99-arduino.rules
+
 # Arduino Uno ID
 # Bus 001 Device 006: ID 2341:0069 Arduino SA 
 # ATTRS{serial}=="30022E1436313536DFA333334B572F3E"
 # SUBSYSTEM=="tty", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0069", ATTRS{serial}=="30022E1436313536DFA333334B572F3E", SYMLINK+="arduino-uno"
+
 
 
 reload rules 

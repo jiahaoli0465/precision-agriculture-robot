@@ -5,6 +5,9 @@ import tf2_ros
 from tf.transformations import quaternion_from_euler
 from geometry_msgs.msg import TransformStamped
 
+FID_IDS = [109, 104, 106, 100]
+
+
 class Mapper:
     """
     When an instance `m` of the `Mapper` class is `run`, for every fiducial with
@@ -18,19 +21,20 @@ class Mapper:
     as an argument of `set_pins`.
     """
 
-    def __init__(self):
+    def __init__(self, fid_ids=FID_IDS):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.tf_broadcaster = tf2_ros.TransformBroadcaster()
         self.pin_dict = {}
+        self.fid_ids = fid_ids
 
-    def set_pins(self, fid_ids):
+    def set_pins(self):
         """
         Build the `pin_dict` that, for every id `i` in `fid_ids`, provides a 
         `(tfs, mapped)` pair, where `tfs` is the frame of `pin_i`, and `mapped`
         is a boolean indicating whether `pin_i` has been mapped. 
         """
-        for id in fid_ids:
+        for id in self.fid_ids:
             tfs = TransformStamped()
             tfs.header.frame_id = 'odom'
             tfs.child_frame_id = f'pin_{id}'
@@ -78,8 +82,6 @@ class Mapper:
 if __name__ == '__main__':
     rospy.init_node('mapper')
     print('running mapper')
-    mapper = Mapper()
-    # The ids of the fiducials the `Mapper` instance should map.
-    fid_ids = [109, 104, 106]
-    mapper.set_pins(fid_ids)
+    mapper = Mapper(FID_IDS)
+    mapper.set_pins()
     mapper.run()

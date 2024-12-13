@@ -23,8 +23,8 @@ RATE = 10
 MIN_TURN_SPEED = 0.1
 MAX_TURN_SPEED = 0.2
 THRESHOLD = 0.5
-BASE = 106
-FIDUCIAL_IDS = [109, 104, 106]
+BASE = 104
+FIDUCIAL_IDS = [109, 104, 100, 106]
 
 
 
@@ -37,7 +37,6 @@ class Sprayer:
         self.relay_pub = rospy.Publisher('/relay_control', String, queue_size=10)
         self.dist = None
         self.yaw = None
-        self.pose = None
         self.base_pose = None
 
         self.tf_buffer = tf2_ros.Buffer()
@@ -47,7 +46,7 @@ class Sprayer:
         self.camera_control = CameraControl()
 
         self.fiducial_plant_image_map = {} #id: [plant_type, image]
-        self.spray_time = {'Cactus': 1.5, 'Thyme':2, 'Basil': 2, 'Parsley': 3, 'Bottle': 5}
+        self.spray_time = {'Cactus': 1, 'Grass':2, 'Succulent': 2, 'Parsley': 3, 'Bottle': 0}
         self.count = 0
 
         self.angular_rate = 2.0
@@ -93,13 +92,25 @@ class Sprayer:
         Rotates the robot to face the target pin directly.
         """
         rospy.loginfo(f"Facing pin {pin_id}")
+        initial_yaw = self.yaw  # Store the initial yaw of the robot
+        twist = Twist()
+
         while not rospy.is_shutdown():
             try:
                 pin_tf = self.tf_buffer.lookup_transform('base_link', f'pin_{pin_id}', rospy.Time())
                 dx = pin_tf.transform.translation.x
                 dy = pin_tf.transform.translation.y
-                target_yaw = math.atan2(dy, dx)
-                self.turn(target_yaw)
+                target_heading = math.atan2(dy, dx)
+                target_heading = target_heading if target_heading >= 0 else 2 * math.pi + target_heading  # Normalize to [0, 2pi]
+                yaw_diff = (target_heading + initial_yaw) - self.yaw
+                yaw_diff = (yaw_diff + math.pi) % (2 * math.pi) - math.pi  # Normalize to [-pi, pi]
+                # self.turn(target_yaw)
+                if abs(yaw_diff) < 0.05:
+                    logger.info(f"Facing pin {pin_id} within threshold.")
+                    break  # If aligned, exit the loop
+                twist.angular.z = yaw_diff * 0.5  # Adjust angular velocity based on the yaw difference
+                twist.linear.x = 0.0  # No linear movement while rotating
+                self.cmd_vel_pub.publish(twist)
                 break
             except (tf2_ros.LookupException, tf2_ros.ExtrapolationException, tf2_ros.ConnectivityException):
                 rospy.logwarn(f"Could not face pin {pin_id}")
@@ -146,11 +157,6 @@ class Sprayer:
         is_detected, plant_type  = self.detector.detect_plant(image)
         if is_detected or plant_type == 'Bottle':
             self.fiducial_plant_image_map[pin_id] = [plant_type, image]
-            # self.turn(0.1)
-            # print('spraying...')
-            # time.sleep(2)
-            # self.spray_water()
-            # print('spraying done')
         else:
             print('not a plant try again')
             time.sleep(1)
@@ -191,8 +197,6 @@ class Sprayer:
 
         while not rospy.is_shutdown():
             twist.linear.x = SPEED  
-
-            start_pose = self.pose
             
             for pin_id in FIDUCIAL_IDS:
                 if pin_id == BASE:
@@ -212,44 +216,43 @@ class Sprayer:
             # self.cmd_vel_pub.publish(twist)
         twist.linear.x = 0.0
 
-    def turn(self, target_yaw):
-        """
-        Turns the robot to heading `target_yaw`.
-        """
-        twist = Twist()
+    # def turn(self, target_yaw):
+    #     """
+    #     Turns the robot to heading `target_yaw`.
+    #     """
+    #     twist = Twist()
 
-        if not self.yaw: return
-        target_yaw = self.yaw + target_yaw
-        target_yaw = self.normalize(target_yaw)
+    #     if not self.yaw: return
+    #     target_yaw = self.yaw + target_yaw
+    #     target_yaw = self.normalize(target_yaw)
 
-        while not rospy.is_shutdown():
-            if self.yaw:
-                difference = self.normalize(target_yaw - self.yaw)
-                if abs(difference) < 0.02:
-                    twist.angular.z = 0.0
-                    twist.linear.x = 0.0
-                    rospy.loginfo("Finish turning to %d", target_yaw)
-                    break
-                else:
-                    twist.linear.x = 0.0
-                    turn_speed = difference * 0.5
+    #     while not rospy.is_shutdown():
+    #         if self.yaw:
+    #             difference = self.normalize(target_yaw - self.yaw)
+    #             if abs(difference) < 0.02:
+    #                 twist.angular.z = 0.0
+    #                 twist.linear.x = 0.0
+    #                 rospy.loginfo("Finish turning to %d", target_yaw)
+    #                 break
+    #             else:
+    #                 twist.linear.x = 0.0
+    #                 turn_speed = difference * 0.5
                     
-                    if turn_speed < MIN_TURN_SPEED:
-                        twist.angular.z = MIN_TURN_SPEED
-                    elif turn_speed > MAX_TURN_SPEED:
-                        twist.angular.z = MAX_TURN_SPEED
-                    else:
-                        twist.angular.z = turn_speed
+    #                 if turn_speed < MIN_TURN_SPEED:
+    #                     twist.angular.z = MIN_TURN_SPEED
+    #                 elif turn_speed > MAX_TURN_SPEED:
+    #                     twist.angular.z = MAX_TURN_SPEED
+    #                 else:
+    #                     twist.angular.z = turn_speed
 
-                self.cmd_vel_pub.publish(twist)
-            self.rate.sleep()
+    #             self.cmd_vel_pub.publish(twist)
+    #         self.rate.sleep()
 
-        twist.linear.x = 0.0
+    #     twist.linear.x = 0.0
 
     def normalize(self, angle):
         """Normalize angle to [-pi, pi]."""
-        pi = math.pi
-        return (angle + pi) % (2 * pi) - pi
+        return (angle + math.pi) % (2 * math.pi) - math.pi
 
     def preprocessor(self, all_ranges):
         '''
@@ -302,6 +305,7 @@ class Sprayer:
 url = 'http://172.20.111.126:6969/'
 # BLOW AND SUCK ON THAT THING if get stuck  
 if __name__ == "__main__":
+
     try: 
         test = sys.argv[1]
         if test == 'test': test = True
@@ -362,15 +366,12 @@ if __name__ == "__main__":
                                     print('sprayer_time', sprayer.spray_time)
                                     print('fiducial_id', fidcuial_id)
 
-                                    # plant_type = sprayer.fiducial_plant_image_map[fiducial_id][0]
-                                    # plant_type = sprayer.fiducial_plant_image_map.get(fidcuial_id, ['error'])[0]
                                     plant_type = sprayer.get_plant_type_by_id(fidcuial_id)
-
   
                                     print('plant_type ', plant_type)
 
                                     spray_time = sprayer.get_spray_time_by_type(plant_type)
-                                    sprayer.turn(-0.05)
+                                    # sprayer.turn(0.05)
                                     sprayer.spray_water(spray_time)
                                     sprayer.face_pin(BASE)
                                     sprayer.move_to_pin(BASE)
