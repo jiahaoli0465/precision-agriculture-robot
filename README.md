@@ -27,4 +27,7 @@ FAQ:
 - [AI Detector](https://github.com/campusrover/labnotebook2/blob/main/docs/faq/ai/AI_Detector.md)
 - [External Actuator Control With ROS Publisher](https://github.com/campusrover/labnotebook2/blob/main/docs/faq/hardware/external_actuator_control.md)
 
+Video:
+https://drive.google.com/file/d/1jsaf8pf4Yxk0OIvKQS2b_4zPKwqGcgWK/view?usp=sharing
+
 [Full Report](https://github.com/campusrover/labnotebook2/blob/main/docs/reports/2024/AgriculturalRobot.md)

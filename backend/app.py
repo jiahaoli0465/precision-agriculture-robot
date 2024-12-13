@@ -94,7 +94,6 @@ def update_instruction():
     elif instruction.startswith('GO_TO_PLANT_'):
         fiducial_id = instruction.split('_')[-1]
         INSTRUCTION = instruction
-
     else:
         return jsonify({"error": "Invalid instruction"}), 400
 
